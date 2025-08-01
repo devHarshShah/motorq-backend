@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:latest # Use the official PostgreSQL image
+    container_name: motorq # Optional: Assign a custom name
+    restart: always # Ensures the container restarts if it stops
+    environment:
+      POSTGRES_USER: myuser # Username for the PostgreSQL database
+      POSTGRES_PASSWORD: mypassword # Password for the PostgreSQL user
+      POSTGRES_DB: motorq # Name of the database to create
+    ports:
+      - '5432:5432' # Maps host port 5432 to container port 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data # Persist data to a named volume
+
+volumes:
+  pgdata: # Define the named volume for data persistence
