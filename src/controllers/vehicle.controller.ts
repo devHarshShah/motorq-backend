@@ -47,6 +47,94 @@ export const getVehicles = async (req: Request, res: Response) => {
   }
 };
 
+// Real-time vehicle search for popover
+export const searchVehiclesRealtime = async (req: Request, res: Response) => {
+  try {
+    const { q, limit = 10, includeActive = false } = req.query;
+    
+    if (!q || (q as string).length < 2) {
+      return res.status(200).json([]);
+    }
+
+    const searchTerm = (q as string).toLowerCase();
+    const limitNum = Math.min(parseInt(limit as string) || 10, 50); // Cap at 50 results
+
+    const whereClause: any = {
+      numberPlate: {
+        contains: searchTerm,
+        mode: "insensitive",
+      },
+    };
+
+    // If includeActive is false, only show vehicles without active sessions
+    if (includeActive === 'false') {
+      whereClause.sessions = {
+        none: {
+          status: "ACTIVE"
+        }
+      };
+    }
+
+    const vehicles = await prisma.vehicle.findMany({
+      where: whereClause,
+      include: {
+        sessions: {
+          where: { status: "ACTIVE" },
+          include: {
+            slot: {
+              select: {
+                location: true,
+                type: true
+              }
+            },
+            billing: {
+              select: {
+                amount: true,
+                isPaid: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            sessions: true
+          }
+        }
+      },
+      take: limitNum,
+      orderBy: [
+        {
+          sessions: {
+            _count: 'desc'
+          }
+        },
+        {
+          numberPlate: 'asc'
+        }
+      ]
+    });
+
+    // Format response for popover display
+    const formattedVehicles = vehicles.map(vehicle => ({
+      id: vehicle.id,
+      numberPlate: vehicle.numberPlate,
+      type: vehicle.type,
+      isActive: vehicle.sessions.length > 0,
+      totalSessions: vehicle._count.sessions,
+      activeSession: vehicle.sessions.length > 0 ? {
+        slot: vehicle.sessions[0].slot,
+        entryTime: vehicle.sessions[0].entryTime,
+        billing: vehicle.sessions[0].billing
+      } : null
+    }));
+
+    res.status(200).json(formattedVehicles);
+  } catch (err: any) {
+    console.error("Error searching vehicles:", err);
+    res.status(500).json({ error: err?.message || "Internal Server Error" });
+  }
+};
+
 // Create vehicle entry with automatic slot assignment
 export const createVehicleEntry = async (req: Request, res: Response) => {
   try {
