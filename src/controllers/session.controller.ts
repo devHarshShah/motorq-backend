@@ -1,5 +1,5 @@
-import { Request, Response } from "express";
-import { PrismaClient, SessionStatus, SlotStatus } from "../generated/prisma";
+import { Request, Response } from 'express';
+import { PrismaClient, SessionStatus, SlotStatus } from '../generated/prisma';
 
 const prisma = new PrismaClient();
 
@@ -28,8 +28,8 @@ export const getSessions = async (req: Request, res: Response) => {
 
     res.status(200).json(sessions);
   } catch (err) {
-    console.error("Error fetching sessions:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error fetching sessions:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
@@ -52,8 +52,8 @@ export const getActiveSessions = async (req: Request, res: Response) => {
 
     res.status(200).json(activeSessions);
   } catch (err) {
-    console.error("Error fetching active sessions:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error fetching active sessions:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
@@ -63,7 +63,7 @@ export const endParkingSession = async (req: Request, res: Response) => {
     const { sessionId } = req.params;
 
     if (!sessionId) {
-      return res.status(400).json({ error: "Session ID is required" });
+      return res.status(400).json({ error: 'Session ID is required' });
     }
 
     // Check if session exists and is active
@@ -77,16 +77,14 @@ export const endParkingSession = async (req: Request, res: Response) => {
     });
 
     if (!session) {
-      return res.status(404).json({ error: "Session not found" });
+      return res.status(404).json({ error: 'Session not found' });
     }
 
     if (session.status !== SessionStatus.ACTIVE) {
-      return res.status(400).json({ error: "Session is not active" });
+      return res.status(400).json({ error: 'Session is not active' });
     }
 
-    // End session and free up slot in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Update session status and set exit time
       const updatedSession = await tx.session.update({
         where: { id: sessionId },
         data: {
@@ -100,7 +98,6 @@ export const endParkingSession = async (req: Request, res: Response) => {
         }
       });
 
-      // Mark slot as available
       await tx.slot.update({
         where: { id: session.slotId },
         data: { status: SlotStatus.AVAILABLE }
@@ -110,13 +107,12 @@ export const endParkingSession = async (req: Request, res: Response) => {
     });
 
     res.status(200).json({
-      message: "Parking session ended successfully",
+      message: 'Parking session ended successfully',
       session: result
     });
-
   } catch (err) {
-    console.error("Error ending parking session:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error ending parking session:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
@@ -136,13 +132,13 @@ export const getSessionById = async (req: Request, res: Response) => {
     });
 
     if (!session) {
-      return res.status(404).json({ error: "Session not found" });
+      return res.status(404).json({ error: 'Session not found' });
     }
 
     res.status(200).json(session);
   } catch (err) {
-    console.error("Error fetching session:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error fetching session:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };
 
@@ -173,7 +169,7 @@ export const getSessionsByVehicle = async (req: Request, res: Response) => {
 
     res.status(200).json(sessions);
   } catch (err) {
-    console.error("Error fetching sessions by vehicle:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error fetching sessions by vehicle:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };

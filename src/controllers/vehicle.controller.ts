@@ -37,7 +37,7 @@ export const getVehicles = async (req: Request, res: Response) => {
           : {}),
       },
       include: {
-        sessions: true, // Or limit to last session using `orderBy` and `take`
+        sessions: true,
       },
     });
     res.status(200).json(vehicles);
