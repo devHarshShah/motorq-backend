@@ -225,6 +225,15 @@ export const manuallyAssignSlotToSession = async (req: Request, res: Response) =
       return res.status(400).json({ error: "Invalid billing type" });
     }
 
+    // Validate staff exists
+    const staff = await prisma.staff.findUnique({
+      where: { id: staffId }
+    });
+
+    if (!staff) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+
     // Check if slot exists
     const slot = await prisma.slot.findUnique({
       where: { id: slotId },
@@ -242,6 +251,11 @@ export const manuallyAssignSlotToSession = async (req: Request, res: Response) =
     // If override slot is provided, validate it
     let overrideSlot = null;
     if (overrideSlotId) {
+      // Prevent self-override
+      if (overrideSlotId === slotId) {
+        return res.status(400).json({ error: "Cannot use the same slot as override slot" });
+      }
+
       overrideSlot = await prisma.slot.findUnique({
         where: { id: overrideSlotId },
       });
@@ -268,6 +282,28 @@ export const manuallyAssignSlotToSession = async (req: Request, res: Response) =
           type: slot.type // Use slot's compatible type
         }
       });
+    } else {
+      // Validate vehicle type compatibility with slot
+      if (vehicle.type !== slot.type) {
+        return res.status(400).json({ 
+          error: `Vehicle type ${vehicle.type} is not compatible with slot type ${slot.type}` 
+        });
+      }
+    }
+
+    // Check if vehicle already has an active session
+    const vehicleActiveSession = await prisma.session.findFirst({
+      where: {
+        vehicleId: vehicle.id,
+        status: 'ACTIVE'
+      }
+    });
+
+    // If vehicle has active session and no override is being performed, reject
+    if (vehicleActiveSession && slot.status !== SlotStatus.OCCUPIED) {
+      return res.status(400).json({ 
+        error: "Vehicle already has an active parking session" 
+      });
     }
 
     // Handle slot assignment or override in a transaction
@@ -275,51 +311,35 @@ export const manuallyAssignSlotToSession = async (req: Request, res: Response) =
       let session;
 
       if (slot.status === SlotStatus.OCCUPIED && overrideSlotId) {
-        // Override scenario: reassign existing session and create new one
+        // Simple override: move vehicle from occupied slot to empty slot
         
         // Find the existing active session in the occupied slot
         const existingSession = await tx.session.findFirst({
           where: {
             slotId: slotId,
             status: 'ACTIVE'
-          },
-          include: {
-            vehicle: true
           }
         });
 
         if (existingSession) {
-          // Reassign existing session to override slot
-          await tx.session.update({
+          // Move the session to the override slot
+          session = await tx.session.update({
             where: { id: existingSession.id },
             data: { slotId: overrideSlotId }
           });
 
-          // Update override slot to occupied
+          // Mark override slot as occupied
           await tx.slot.update({
             where: { id: overrideSlotId },
             data: { status: SlotStatus.OCCUPIED }
           });
+
+          // Mark original slot as available
+          await tx.slot.update({
+            where: { id: slotId },
+            data: { status: SlotStatus.AVAILABLE }
+          });
         }
-
-        // Create new session for the requested vehicle in the original slot
-        session = await tx.session.create({
-          data: {
-            vehicleId: vehicle.id,
-            slotId: slotId,
-            staffId: staffId,
-            billingType: billingType,
-            entryTime: new Date(),
-            status: 'ACTIVE'
-          },
-          include: {
-            vehicle: true,
-            slot: true,
-            staff: true
-          }
-        });
-
-        // Original slot remains occupied (new session)
       } else {
         // Normal assignment to available slot
         session = await tx.session.create({
